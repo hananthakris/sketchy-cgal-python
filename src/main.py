@@ -21,16 +21,13 @@ def Primitive3MultRank(U):
     pass
 
 
-def cutvalue(c, U):
-    """function cutvalue = round(C,u)
-        cutvalue = 0;
-        for t = 1:size(u,2)
-        sign_evec = sign(u(:,t));
-        rankvalue = -(sign_evec'*(C*sign_evec));
-        cutvalue = max(cutvalue, rankvalue);
-    end
-    end"""
-    pass
+def cutvalue(C, u):
+    cutvalue = 0
+    for t in range(1,np.shape(u)[2]):
+        sign_evec = np.sign(u[:, t])
+        rankvalue = -(sign_evec.getH() * (C*sign_evec))
+        cutvalue = max(cutvalue, rankvalue)
+    return cutvalue
 
 
 if __name__ == "__main__":
@@ -76,12 +73,5 @@ if __name__ == "__main__":
         SCALE_C=SCALE_C,
         stoptol=0.1,
     )
-    """ 
-                     
-cputimeEnd = cputime;
-totalTime = toc(timer);
-
-out.totalTime = totalTime;
-out.totalCpuTime = cputimeEnd - cputimeBegin;"""
     # Evaluate Errors
     # Save results
