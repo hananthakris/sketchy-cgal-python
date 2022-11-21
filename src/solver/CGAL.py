@@ -234,7 +234,7 @@ class CGAL:
     def solve(self):
         self.cntTotal = 0
         self.TRACE = 0
-        for t in range(1, self.T):
+        for t in range(self.T):
             self.beta = self.beta0 * math.sqrt(self.T + 1)
             eta = 2 / (self.T + 1)
             if self.FLAG_INCLUSION:
