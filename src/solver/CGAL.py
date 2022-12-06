@@ -92,13 +92,21 @@ class CGAL:
         self.pobj = 0
 
     def choose_method(self):
-        # Choose method - cgal, sketchy cgal, thin cgal
+        """
+        Chooses which method to use - cgal, sketchy cgal
+        :return:  <Modiifies self>
+        """
+
         if self.FLAG_METHOD == 0:
             self.X = np.zeros(self.n, self.n)
         elif self.FLAG_METHOD == 1:
             self.mySketch = NystromSketch(self.n, self.R, self.SKETCH_FIELD)
 
     def choose_linear_minimization_oracle(self):
+        """
+        Chooses which approximation method to use
+        :return: <Modiifies self>
+        """
         if self.FLAG_LANCZOS == 2:
             self.ApproxMinEvec = lambda x, t: ApproxMinEvecLanczosSE(
                 x, self.n, math.ceil((t ** 0.25) * math.log(self.n, 2))
@@ -114,6 +122,10 @@ class CGAL:
 
     # Check convergence
     def scale(self):
+        """
+        Scales the matrices to desired levels
+        :return:  <Modiifies self>
+        """
         self.b_org = self.b
         self.RESCALE_FEAS = 1
         self.RESCALE_OBJ = 1
@@ -134,6 +146,11 @@ class CGAL:
     # Start iterations and solve
 
     def ApplyMinEvecApply(self, t):
+        """
+        Applies the minimization function
+        :param t: time step
+        :return:  <Modiifies self>
+        """
         self.u, self.sig, cntInner = self.ApproxMinEvec(self.eigsArg, t)
         self.cntTotal += cntInner
         if self.sig > 0:
@@ -143,6 +160,10 @@ class CGAL:
             self.u = np.sqrt(self.a_t) * self.u
 
     def getObjCond(self):
+        """
+        Written to reduce code redundancy
+        :return:  <Modiifies self>
+        """
         AHk = self.Primitive3(self.u)
         var = (
             self.pobj
@@ -157,6 +178,11 @@ class CGAL:
         return AHk, ObjCond
 
     def check_stopping_criteria(self, t):
+        """
+        Checks if the given loop meets stopping criteria, if yes breaks
+        :param t: time step
+        :return:  <Modiifies self>
+        """
         if self.stoptol:
             if self.stopcond:
                 if self.FLAG_METHOD == 0:
@@ -203,6 +229,12 @@ class CGAL:
         return False
 
     def implement_stopping_criterion(self, t, msg="accurate stopping"):
+        """
+        Implements stopping criteria
+        :param t: time step
+        :param msg: what kind of stopping/ reason for stoppig
+        :return:  <Modiifies self>
+        """
         if len(self.SAVEHIST) > 0:
             self.updateErrStructs(t)
             self.printError(t)
@@ -213,6 +245,10 @@ class CGAL:
         pass
 
     def Primitive3MultRank(self):
+        """
+        Primitive3MultRank
+        :return: AUU
+        """
         if self.FLAG_MULTIRANK_P3:
             AUU = self.Primitive3(self.U)
         else:
@@ -223,6 +259,10 @@ class CGAL:
         return AUU
 
     def Primitive1MultRank(self):
+        """
+        Primitive1MultRank
+        :return: CU
+        """
         if self.FLAG_MULTIRANK_P1:
             CU = self.Primitive1(self.U)
         else:
@@ -233,6 +273,10 @@ class CGAL:
 
     # Create and maintain structures where we store optimization information
     def create_err_structs(self):
+        """
+        Create final structures to display
+        :return:
+        """
         if self.stoptol or self.FLAG_EVALSURROGATEGAP:
             if self.stopcond:
                 self.out["info"]["stopCond"] = np.empty(len(self.SAVEHIST))
@@ -271,6 +315,11 @@ class CGAL:
         return errNames, errNamesPrint, ptr
 
     def printError(self, t):
+        """
+        print required errors
+        :param t: t
+        :return:
+        """
         str = f"| {t} |"
         for p in range(len(self.errNames)):
             if self.out["info"].get(self.errNames[p], None) is not None:
@@ -280,12 +329,21 @@ class CGAL:
         print(str)
 
     def printHeader(self):
+        """
+        Print the header
+        :return:
+        """
         str = "|    iter | "
         for p in self.errNamesPrint:
             str += f" {p}     |"
         print(str)
 
     def updateErrStructs(self, t):
+        """
+        Update final print structure with each SAVEHIST timestep
+        :param t:
+        :return:
+        """
         if self.ptr % 20 == 0:
             self.printHeader()
         self.ptr += 1
@@ -350,9 +408,6 @@ class CGAL:
             self.out["info"][k] = np.empty(len(self.SAVEHIST))
         for k in param_fields:
             self.out["params"][k] = 0
-
-    def store_errors(self):
-        print("sup store")
 
     def solve(self):
         self.cntTotal = 0
