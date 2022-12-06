@@ -12,7 +12,11 @@ class NystromSketch:
             self.Omega = np.random.randn(n, R) + 1j * np.random.randn(n, R)
         else:
             print("Should be real or complex")
-        self.S = np.zeros(n, R)
+        self.S = np.zeros((n, R))
+
+    def mrdivide(self, A, B):
+        C = A.dot(B.T.dot(np.linalg.inv(B.dot(B.T))))
+        return C
 
     def reconstruct(self):
         eps = sys.float_info.epsilon
@@ -20,19 +24,22 @@ class NystromSketch:
         n = np.size(self.S, 1)
         sigma = np.sqrt(n) * eps * max(np.linalg.norm(S, axis=-1))
         S = S + sigma * self.Omega
-        B = self.Omega.T * S
+        B = self.Omega.T.dot(S)
         B = 0.5 * (B + B.T)
-        if ~any(B[:]):
+        if not np.any(B):
             Delta = 0
             U = np.zeros(n, 1)
         else:
             C = np.linalg.cholesky(B)
-            U, Sigma, temp = np.linalg.svd(S / C)
-            Delta = max(np.power(Sigma, 2) - sigma * np.eye(np.size(Sigma)), 0)
+            U, Sigma, temp = np.linalg.svd(self.mrdivide(S, C), full_matrices=False)
+            Delta = np.power(Sigma, 2) - sigma * np.eye(10, 10)
+            Delta = np.where(Delta < 0, 0, Delta)
         return U, Delta
 
     def rank_one_update(self, v, eta):
-        self.S = (1 - eta) * self.S + eta * (v * (v.T * self.Omega))
+        self.S = (1 - eta) * self.S + eta * (
+            v.reshape(len(v), 1).dot((v.T.reshape(1, len(v)).dot(self.Omega)))
+        )
 
     def set(self, val):
         if np.size(val) == np.size(self.S) or not self.S:

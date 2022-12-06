@@ -1,9 +1,10 @@
 import numpy as np
 import sys
+import scipy.sparse.linalg as sla
 
 
 def ApproxMinEvecPower(M, n, q):
-    if M.isnumeric():
+    if not callable(M):
         M = lambda x: M * x
 
     Mnorm, cnt = powermethod(M, n, 0.1)
@@ -46,21 +47,20 @@ def powermethod(S, n, tol):
 
 def cgal_eig(X):
     try:
-        V, D = np.linalg.eig(X)
+        D, V = np.linalg.eig(X)
     except:
+        print("EXCEPTION")
         V, D, W = np.linalg.svd(X)
-        D = np.diagonal(D).T * np.sign(np.real(np.dot(V, W, 1)))
+        D = np.diagonal(D).T.dot(np.sign(np.real(np.dot(V, W, 1))))
         D, ind = np.sort(D)
         V = V[:, ind]
-    return V, D
+    return D, V
 
 
 def ApproxMinEvecLanczosSE(M, n, q):
     q = min(q, n - 1)
-    if M.isnumeric():
+    if not callable(M):
         M = lambda x: M * x
-
-    Q = np.zeros((n, q + 1))
 
     aleph = np.zeros(q)
     beth = np.zeros(q)
@@ -71,7 +71,7 @@ def ApproxMinEvecLanczosSE(M, n, q):
     i = 0
     for i in range(q):
         vip1 = M(vi)
-        aleph[i] = np.real(vi.T * vip1)
+        aleph[i] = np.real(vi.T.dot(vip1))
         if i == 0:
             vip1 -= aleph[i] * vi
         else:
@@ -83,23 +83,19 @@ def ApproxMinEvecLanczosSE(M, n, q):
         vim1 = vi
         vi = vip1
 
-    B = (
-        np.diagonal(aleph[:i], 0)
-        + np.diagonal(beth[1 : [i - 1]], +1)
-        + np.diagonal(beth[1 : [i - 1]], -1)
-    )
-    U, D = cgal_eig(0.5 * (B + np.transpose(B)))
-    [xi, ind] = min(D)
+    B = np.diag(aleph[:i], 0) + np.diag(beth[: i - 1], 1) + np.diag(beth[: i - 1], -1)
+    D, U = cgal_eig(0.5 * (B + np.transpose(B)))
+    ind = np.argmin(D)
+    xi = D[ind]
     Uind1 = U[:, ind]
     aleph = np.zeros(q)
     beth = np.zeros(q)
     vi = v
     v = np.zeros(n)
     for i in range(len(Uind1)):
-        v = v + vi * Uind1(i)
-
+        v = v + vi * Uind1[i]
         vip1 = M(vi)
-        aleph[i] = np.real(vi.T * vip1)
+        aleph[i] = np.real(vi.T.dot(vip1))
         if i == 1:
             vip1 = vip1 - aleph[i] * vi
         else:
@@ -145,14 +141,10 @@ def ApproxMinEvecLanczos(M, n, q):
 
         Q[:, i + 1] /= beth[i]
 
-    B = (
-        np.diagonal(aleph[0:i], 0)
-        + np.diagonal(beth[1 : [i - 1]], +1)
-        + np.diagonal(beth[1 : [i - 1]], -1)
-    )
-
+    B = np.diag(aleph[:i], 0) + np.diag(beth[:i], +1) + np.diag(beth[:i], -1)
     U, D = cgal_eig(0.5 * (B + np.transpose(B)))
-    [xi, ind] = min(D)
+    ind = np.argmin(D)
+    xi = D[ind]
     v = Q[:, :i] * U[:, ind]
     nv = np.linalg.norm(v)
     xi = xi * nv

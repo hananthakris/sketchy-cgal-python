@@ -1,8 +1,7 @@
 import math
 import numpy as np
-from src.solver.nystrom_sketch import NystromSketch
-from src.utils.utils import updateThinSVDrank1
-from src.utils.approx_eigenvectors import (
+from solver.nystrom_sketch import NystromSketch
+from utils.approx_eigenvectors import (
     ApproxMinEvecLanczosSE,
     ApproxMinEvecLanczos,
     ApproxMinEvecPower,
@@ -43,12 +42,16 @@ class CGAL:
         FLAG_MULTIRANK_P1=False,
         FLAG_MULTIRANK_P3=False,
         SKETCH_FIELD="real",
-        ERR={},
+        errfunc={},
         SCALE_A=1,
         SCALE_C=1,
         SCALE_X=1,
         NORM_A=1,
     ):
+        self.final_print = []
+        self.out = {}
+        self.out["info"] = {}
+        self.out["params"] = {}
         self.n = n
         self.Primitive1 = Primitive1
         self.Primitive2 = Primitive2
@@ -71,7 +74,7 @@ class CGAL:
         self.FLAG_MULTIRANK_P1 = FLAG_MULTIRANK_P1
         self.FLAG_MULTIRANK_P3 = FLAG_MULTIRANK_P3
         self.SKETCH_FIELD = SKETCH_FIELD
-        self.ERR = ERR
+        self.errfunc = errfunc
         self.SCALE_A = SCALE_A
         self.SCALE_C = SCALE_C
         self.SCALE_X = SCALE_X
@@ -79,13 +82,12 @@ class CGAL:
         arr = [2 ** i for i in range(0, math.floor(math.log(self.T, 2)))]
         arr.append(self.T)
         self.SAVEHIST = np.unique(arr)
-
         self.scale()
         self.choose_method()
+        self.errNames, self.errNamesPrint, self.ptr = self.create_err_structs()
         self.choose_linear_minimization_oracle()
-
-        self.z = np.zeros(self.b.shape[1], 1)
-        self.y0 = np.zeros(self.b.shape[1], 1)
+        self.z = np.zeros(self.b.shape[0])
+        self.y0 = np.zeros(self.b.shape[0])
         self.y = self.y0
         self.pobj = 0
 
@@ -95,9 +97,6 @@ class CGAL:
             self.X = np.zeros(self.n, self.n)
         elif self.FLAG_METHOD == 1:
             self.mySketch = NystromSketch(self.n, self.R, self.SKETCH_FIELD)
-        elif self.FLAG_METHOD == 2:
-            self.UTHIN = np.zeros(self.n, 1)
-            self.DTHIN = 0
 
     def choose_linear_minimization_oracle(self):
         if self.FLAG_LANCZOS == 2:
@@ -121,12 +120,12 @@ class CGAL:
 
         if self.SCALE_A != 1:
             self.b = self.b * self.SCALE_A
-            self.Primitive3 = lambda x: self.Primitive3(x).multiply(self.SCALE_A)
-            self.Primitive2 = lambda y, x: self.Primitive2(y.multiply(self.SCALE_A), x)
+            self.Primitive3_ = lambda x: self.Primitive3(x) * self.SCALE_A
+            self.Primitive2_ = lambda y, x: self.Primitive2(y * self.SCALE_A, x)
             self.RESCALE_FEAS = self.RESCALE_FEAS / self.SCALE_A
 
         if self.SCALE_C != 1:
-            self.Primitive1 = lambda x: self.Primitive1(x).multiply(self.SCALE_C)
+            self.Primitive1_ = lambda x: self.Primitive1(x) * self.SCALE_C
             self.RESCALE_OBJ = self.RESCALE_OBJ / self.SCALE_C
 
         if self.FLAG_INCLUSION:
@@ -138,25 +137,22 @@ class CGAL:
         self.u, self.sig, cntInner = self.ApproxMinEvec(self.eigsArg, t)
         self.cntTotal += cntInner
         if self.sig > 0:
-            self.a_t = min(self.a)
+            self.a_t = min([self.a])
         else:
-            self.a_t = max(self.a)
+            self.a_t = max([self.a])
             self.u = np.sqrt(self.a_t) * self.u
 
     def getObjCond(self):
         AHk = self.Primitive3(self.u)
-        ObjCond = (
-            (
-                self.pobj
-                - self.Primitive1(self.u).getH() * self.u
-                + self.y.T * (self.b - AHk)
-                + self.beta * (self.z - self.b).getH() * (self.z - AHk)
-                - 0.5 * self.beta * np.linalg.norm(self.z - self.b)
-                ^ 2
-            )
-            * self.RESCALE_OBJ
-            / max(abs(self.pobj * self.RESCALE_OBJ), 1)
+        var = (
+            self.pobj
+            - self.Primitive1_(self.u).conj().T.dot(self.u)
+            + self.y.T.dot(self.b - AHk)
+            + self.beta * (self.z - self.b).conj().T.dot(self.z - AHk)
+            - 0.5 * self.beta * np.linalg.norm(self.z - self.b) ** 2
         )
+
+        ObjCond = var * self.RESCALE_OBJ / max(abs(self.pobj * self.RESCALE_OBJ), 1)
 
         return AHk, ObjCond
 
@@ -164,21 +160,18 @@ class CGAL:
         if self.stoptol:
             if self.stopcond:
                 if self.FLAG_METHOD == 0:
-                    self.U, self.Delt = eigs(self.X, self.R, which="LM")
+                    self.Delt, self.U = eigs(self.X, self.R, which="LM")
                 elif self.FLAG_METHOD == 1:
-                    self.U, self.Delt = self.mySketch.Reconstruct()
+                    self.U, self.Delt = self.mySketch.reconstruct()
                     if self.FLAG_TRACECORRECTION:
                         self.Delt = self.Delt + (
                             (self.TRACE - np.trace(self.Delt)) / self.R
                         ) * np.eye(np.shape(self.Delt)[0])
-                elif self.FLAG_METHOD == 2:
-                    self.U = self.UTHIN
-                    self.Delt = self.DTHIN
                 self.U = self.U * np.sqrt(self.Delt)
 
-                if self.stopcond(self.U / np.sqrt(self.SCALE_X)) <= self.stoptol:
-                    self.implement_stopping_criterion(msg="stopcond stopping")
-                    return True
+                # if self.stopcond(self.U / np.sqrt(self.SCALE_X)) <= self.stoptol:
+                #     self.implement_stopping_criterion(t=t, msg="stopcond stopping")
+                #     return True
 
             else:
                 FeasOrg = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS)
@@ -196,45 +189,175 @@ class CGAL:
                             )
                         AHk, ObjCond = self.getObjCond()
                         if ObjCond <= self.stoptol:
-                            self.implement_stopping_criterion(msg="accurate stopping")
+                            self.implement_stopping_criterion(
+                                t, msg="accurate stopping"
+                            )
                             return True
 
                     else:
-                        self.implement_stopping_criterion(msg="stopping criteria met")
+                        self.implement_stopping_criterion(
+                            t, msg="stopping criteria met"
+                        )
                         return True
 
         return False
 
-    def implement_stopping_criterion(self, msg="accurate stopping"):
-        if self.SAVEHIST:
-            self.updateErrStructs()
-            self.printError()
+    def implement_stopping_criterion(self, t, msg="accurate stopping"):
+        if len(self.SAVEHIST) > 0:
+            self.updateErrStructs(t)
+            self.printError(t)
             self.clearErrStructs()
         self.status = msg
 
     def update(self):
         pass
 
+    def Primitive3MultRank(self):
+        if self.FLAG_MULTIRANK_P3:
+            AUU = self.Primitive3(self.U)
+        else:
+            AUU = np.zeros(len(self.b))
+            for ind in range(self.U.shape[1]):
+                AUU += self.Primitive3(self.U[:, ind])
+
+        return AUU
+
+    def Primitive1MultRank(self):
+        if self.FLAG_MULTIRANK_P1:
+            CU = self.Primitive1(self.U)
+        else:
+            CU = np.zeros(len(self.b))
+            for ind in range(self.U.shape[1]):
+                CU[:, ind] = self.Primitive1(self.U[:, ind])
+        return CU
+
     # Create and maintain structures where we store optimization information
     def create_err_structs(self):
-        pass
+        if self.stoptol or self.FLAG_EVALSURROGATEGAP:
+            if self.stopcond:
+                self.out["info"]["stopCond"] = np.empty(len(self.SAVEHIST))
+                if self.FLAG_EVALSURROGATEGAP:
+                    self.out["info"]["stopObj"] = np.empty(len(self.SAVEHIST))
+                    self.out["info"]["stopFeas"] = np.empty(len(self.SAVEHIST))
+            else:
+                self.out["info"]["stopObj"] = np.empty(len(self.SAVEHIST))
+                self.out["info"]["stopFeas"] = np.empty(len(self.SAVEHIST))
 
-    def printError(self):
-        pass
+        self.out["info"]["primalObj"] = np.empty(len(self.SAVEHIST))
+        self.out["info"]["primalFeas"] = np.empty(len(self.SAVEHIST))
+        if self.FLAG_METHOD == 1:
+            self.out["info"]["skPrimalObj"] = np.empty(len(self.SAVEHIST))
+            self.out["info"]["skPrimalFeas"] = np.empty(len(self.SAVEHIST))
+        for k, val in self.errfunc.items():
+            self.out["info"][k] = np.empty(len(self.SAVEHIST))
+        self.out["info"]["cntTotal"] = np.empty(len(self.SAVEHIST))
+        self.out["iteration"] = np.empty(len(self.SAVEHIST))
+        self.out["time"] = np.empty(len(self.SAVEHIST))
+        self.out["cputime"] = np.empty(len(self.SAVEHIST))
+        errNames = list(self.out["info"].keys())
+        errNamesPrint = errNames
+        for pIt in range(len(errNamesPrint)):
+            if len(errNamesPrint[pIt]) > 10:
+                errNamesPrint[pIt] = errNamesPrint[pIt][:10]
+        ptr = 0
+        self.status = "running"
+        self.out["params"]["ALPHA"] = self.a
+        self.out["params"]["BETA0"] = self.beta0
+        self.out["params"]["R"] = self.R
+        self.out["params"]["FLAG_LANCZOS"] = self.FLAG_LANCZOS
+        self.out["params"]["FLAG_TRACECORRECTION"] = self.FLAG_TRACECORRECTION
+        self.out["params"]["FLAG_SKETCH"] = self.FLAG_METHOD
+        self.status = "running"
+        return errNames, errNamesPrint, ptr
 
-    def updateErrStructs(self):
-        pass
+    def printError(self, t):
+        str = f"| {t} |"
+        for p in range(len(self.errNames)):
+            if self.out["info"].get(self.errNames[p], None) is not None:
+                str += f" {self.out['info'][self.errNames[p]][self.ptr]} |"
+            else:
+                str += "Nan |"
+        print(str)
+
+    def printHeader(self):
+        str = "|    iter | "
+        for p in self.errNamesPrint:
+            str += f" {p}     |"
+        print(str)
+
+    def updateErrStructs(self, t):
+        if self.ptr % 20 == 0:
+            self.printHeader()
+        self.ptr += 1
+        self.out["iteration"][self.ptr] = t
+        # self.time[self.ptr] = self.totTime
+        # self.time[self.ptr] = self.totCpuTime
+        self.out["info"]["primalObj"][self.ptr] = self.pobj * self.RESCALE_OBJ
+        if self.FLAG_INCLUSION:
+            FEAS = np.linalg.norm((self.z - self.PROJBOX(self.z)) * self.RESCALE_FEAS)
+        else:
+            FEAS = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS) / (
+                1 + np.linalg.norm(self.b_org)
+            )
+        self.out["info"]["primalFeas"][self.ptr] = FEAS
+        self.out["info"]["cntTotal"][self.ptr] = self.cntTotal
+        if self.FLAG_METHOD == 1:
+            self.U, self.Delt = self.mySketch.reconstruct()
+            if self.FLAG_TRACECORRECTION:
+                self.Delt += ((self.TRACE - np.trace(self.Delt)) / self.R) * np.eye(
+                    len(self.Delt)
+                )
+            self.U = self.U.dot(np.sqrt(self.Delt))
+            self.out["info"]["skPrimalObj"][self.ptr] = (
+                np.trace(self.U.conj().T.dot(self.Primitive1MultRank()))
+                * self.RESCALE_OBJ
+            )
+            if self.FLAG_INCLUSION:
+                self.AUU = self.Primitive3MultRank()
+                self.out["info"]["skPrimalFeas"][self.ptr] = np.linalg.norm(
+                    (self.AUU - self.PROJBOX(self.AUU)) * self.RESCALE_FEAS
+                )
+            else:
+                self.out["info"]["skPrimalFeas"][self.ptr] = np.linalg.norm(
+                    (self.Primitive3MultRank() - self.b) * self.RESCALE_FEAS
+                ) / (1 + np.linalg.norm(self.b_org))
+
+        elif self.FLAG_METHOD == 0:
+            self.Delt, self.U = eigs(self.X, self.R, which="LM")
+            self.U *= np.sqrt(self.Delt)
+
+        else:
+            print("Unknown FLAG_METHOD.")
+
+        if not self.stoptol:
+            FeasOrg = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS)
+            FeasCond = FeasOrg / max(np.linalg.norm(self.b_org), 1)
+            AHk, ObjCond = self.getObjCond()
+
+            self.out["info"]["stopObj"][self.ptr] = ObjCond
+            self.out["info"]["stopFeas"][self.ptr] = FeasCond
+
+        for k, val in self.errfunc.items():
+            self.out["info"][k][self.ptr] = val(self.U / math.sqrt(self.SCALE_X))
 
     def clearErrStructs(self):
-        pass
+        self.out["iteration"] = np.empty(len(self.SAVEHIST))
+        self.out["time"] = np.empty(len(self.SAVEHIST))
+        self.out["cputime"] = np.empty(len(self.SAVEHIST))
+        info_fields = self.out["info"].keys()
+        param_fields = self.out["params"].keys()
+        for k in info_fields:
+            self.out["info"][k] = np.empty(len(self.SAVEHIST))
+        for k in param_fields:
+            self.out["params"][k] = 0
 
     def store_errors(self):
-        pass
+        print("sup store")
 
     def solve(self):
         self.cntTotal = 0
         self.TRACE = 0
-        for t in range(self.T):
+        for t in range(1, int(self.T) + 1):
             self.beta = self.beta0 * math.sqrt(self.T + 1)
             eta = 2 / (self.T + 1)
             if self.FLAG_INCLUSION:
@@ -244,7 +367,7 @@ class CGAL:
             else:
                 self.vt = self.y + self.beta * (self.z - self.b)
 
-            self.eigsArg = lambda u: self.Primitive1(u) + self.Primitive2(self.vt, u)
+            self.eigsArg = lambda u: self.Primitive1_(u) + self.Primitive2(self.vt, u)
             self.ApplyMinEvecApply(t)
             if self.check_stopping_criteria(t):
                 break
@@ -253,17 +376,13 @@ class CGAL:
                 self.z = (1 - eta) * self.z + eta * self.zEvec
                 self.TRACE = (1 - eta) * self.TRACE + eta * self.a_t
 
-                objEvec = self.u.getH() * self.Primitive1(self.u)
+                objEvec = np.dot(self.u.conj().T, self.Primitive1_(self.u))
                 self.pobj = (1 - eta) * self.pobj + eta * objEvec
 
                 if self.FLAG_METHOD == 0:
-                    self.X = (1 - eta) * self.X + eta * (self.u * self.u.getH())
+                    self.X = (1 - eta) * self.X + eta * np.dot(self.u, self.u.conj().T)
                 elif self.FLAG_METHOD == 1:
-                    self.mySketch.RankOneUpdate(self.u, eta)
-                elif self.FLAG_METHOD == 2:
-                    self.UTHIN, self.DTHIN = updateThinSVDrank1(
-                        self.UTHIN, (1 - eta) * self.DTHIN, self.u, eta
-                    )
+                    self.mySketch.rank_one_update(self.u, eta)
 
                 beta_p = self.beta0 * math.sqrt(t + 2)
 
@@ -274,9 +393,12 @@ class CGAL:
 
                 sigma = min(
                     self.beta0,
-                    4 * beta_p * eta
-                    ^ 2 * max(self.a) ** 2 * self.NORM_A
-                    ^ 2 / np.linalg.norm(dualUpdate) ** 2,
+                    4
+                    * beta_p
+                    * eta ** 2
+                    * max([self.a]) ** 2
+                    * self.NORM_A ** 2
+                    / np.linalg.norm(dualUpdate) ** 2,
                 )
 
                 # Update the DUAL
@@ -292,9 +414,9 @@ class CGAL:
                 #     break
 
                 # Update OUT
-                if any(t == self.SAVEHIST):
-                    self.updateErrStructs()
-                    self.printError()
+                if t in self.SAVEHIST:
+                    self.updateErrStructs(t)
+                    self.printError(t)
 
         if self.FLAG_METHOD == 0:
             self.U = np.divide(self.X, self.SCALE_X)
@@ -305,9 +427,6 @@ class CGAL:
                     (self.TRACE - np.trace(self.Delt)) / self.R
                 ) * np.eye(np.shape(self.Delt)[0])
             self.Delt = np.divide(self.Delt, self.SCALE_X)
-        elif self.FLAG_METHOD == 2:
-            self.U = self.UTHIN
-            self.Delt = np.divide(self.DTHIN, self.SCALE_X)
         self.y = np.divide(np.multiply(self.SCALE_A, self.y), self.SCALE_C)
         self.z = np.multiply(self.z, self.RESCALE_FEAS)
-        self.pobj = np.multiply(self.pobj, self.RESCALE_OBJ)
+        self.pobj *= self.RESCALE_OBJ

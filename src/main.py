@@ -1,5 +1,6 @@
 import math
 import time
+import pandas as pd
 import numpy as np
 from solver.CGAL import CGAL
 import scipy.io as sio
@@ -9,23 +10,11 @@ from scipy.sparse.linalg import norm
 from os.path import dirname, join as pjoin
 
 
-def Primitive1MultRank(U):
-    pass
-
-
-def Primitive2MultRank(U):
-    pass
-
-
-def Primitive3MultRank(U):
-    pass
-
-
 def cutvalue(C, u):
     cutvalue = 0
-    for t in range(1,np.shape(u)[2]):
+    for t in range(np.shape(u)[1]):
         sign_evec = np.sign(u[:, t])
-        rankvalue = -(sign_evec.getH() * (C*sign_evec))
+        rankvalue = -(sign_evec.conj().T.dot(C*sign_evec))
         cutvalue = max(cutvalue, rankvalue)
     return cutvalue
 
@@ -45,14 +34,16 @@ if __name__ == "__main__":
     C = (-0.25) * C
 
     del data
-
+    errfunc = {}
     Primitive1 = lambda x: C * x
     Primitive2 = lambda y, x: y * x
-    Primitive3 = lambda x: np.sum(np.power(x, 2), 2)
+    Primitive3 = lambda x: np.sum(np.power(x, 2))
+    errfunc['cutvalue'] = lambda u: cutvalue(C, u)
     a = n
     b = np.ones((n))
     SCALE_X = 1 / n
     SCALE_C = 1 / norm(C, ord="fro")
+    print(SCALE_C)
 
     varargins = dict()
 
@@ -61,6 +52,7 @@ if __name__ == "__main__":
         Primitive1=Primitive1,
         Primitive2=Primitive2,
         Primitive3=Primitive3,
+        errfunc=errfunc,
         a=a,
         b=b,
         R=R,
@@ -73,5 +65,6 @@ if __name__ == "__main__":
         SCALE_C=SCALE_C,
         stoptol=0.1,
     )
-    # Evaluate Errors
-    # Save results
+    obj.solve()
+    #obj.print_err_structs()
+    #obj.update()
