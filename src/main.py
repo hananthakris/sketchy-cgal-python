@@ -3,7 +3,15 @@ from solver.CGAL import CGAL
 from pymatreader import read_mat
 from scipy.sparse import spdiags
 from scipy.sparse.linalg import norm
-
+import argparse
+parser = argparse.ArgumentParser(
+                    prog = 'Sketchy-CGAL-Python',
+                    description = 'Storage optimized SDP solver',
+                    epilog = 'Text at the bottom of help')
+parser.add_argument('--data_store', type=str, help='Folder where all your GSET files are stored')
+parser.add_argument('--R', type=int, help='Rank/Sketch size parameter')
+parser.add_argument('--max_it',  type=int, help='max iterations, enter a power of 10. Ex: 6 would mean 10^6')
+args = parser.parse_args()
 
 def cutvalue(C, u):
     """
@@ -21,12 +29,11 @@ def cutvalue(C, u):
 
 
 if __name__ == "__main__":
-    R = 10  # rank/sketch size parameter
+    R = args.R  # rank/sketch size parameter
     beta0 = 1  # we didn't tune - choose 1 - you can tune this!
     K = float("inf")
-    maxit = 1e6  # limit on number of iterations
-    # mat_fname = pjoin(data_dir, 'testdouble_7.4_GLNX86.mat')
-    mat_fname = "/Users/haritha/Desktop/SketchyCGAL/FilesMaxcut/data/G/G1.mat"
+    maxit = 10** args.max_it  # limit on number of iterations
+    mat_fname = f"{args.data_store}/G/G1.mat"
     data = read_mat(mat_fname)
     A = data["Problem"]["A"]
     n = A.shape[0]
@@ -49,7 +56,6 @@ if __name__ == "__main__":
     Primitive2 = lambda y, x: y.dot(x)
     Primitive3 = lambda x: np.sum(np.power(x, 2))
     errfunc['cutvalue'] = lambda u: cutvalue(C, u)
-    varargins = dict()
 
     obj = CGAL(
         n=n,
@@ -69,6 +75,4 @@ if __name__ == "__main__":
         SCALE_C=SCALE_C,
         stoptol=0.1,
     )
-    obj.solve()
-    #obj.print_err_structs()
-    #obj.update()
+    obj.solve() # Call to the solve() function inside the CGAL file.
