@@ -371,11 +371,11 @@ class CGAL:
             self.U = self.U.dot(np.sqrt(self.Delt))
 
             skpo = self.Primitive1MultRank(self.U)
-            blah2 = self.U.conj().T
-            blah = np.trace(blah2.dot(skpo))
-            blah3 = blah*self.RESCALE_OBJ
+            conj_transpose = self.U.conj().T
+            aa = np.trace(conj_transpose.dot(skpo))
+            bb = aa*self.RESCALE_OBJ
 
-            self.out["info"]["skPrimalObj"][self.ptr] = blah3
+            self.out["info"]["skPrimalObj"][self.ptr] = bb
             if self.FLAG_INCLUSION:
                 self.AUU = self.Primitive3MultRank()
                 self.out["info"]["skPrimalFeas"][self.ptr] = np.linalg.norm(
@@ -420,6 +420,8 @@ class CGAL:
         self.cntTotal = 0
         self.TRACE = 0
         for t in range(1, int(self.T) + 1):
+            if self.ptr == 10:
+                break
             self.beta = self.beta0 * math.sqrt(t + 1)
             eta = 2 / (t + 1)
             if self.FLAG_INCLUSION:
@@ -467,13 +469,6 @@ class CGAL:
                 yt1 = self.y + sigma * dualUpdate
                 if np.linalg.norm(yt1 - self.y0) <= self.K:
                     self.y = yt1
-
-                # # Measure the runtime
-                # totTime = toc(timer);
-                # totCpuTime = cputime - cputime0;
-                # if totCpuTime > self.WALLTIME:
-                #     self.implement_stopping_criterion(msg = 'wall time achieved')
-                #     break
 
                 # Update OUT
                 if t in self.SAVEHIST:
