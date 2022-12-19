@@ -1,0 +1,4 @@
+numba==0.56.4
+numpy==1.20.3
+pymatreader==0.0.30
+scipy==1.7.3
