@@ -6,6 +6,12 @@ from scipy.sparse.linalg import norm
 
 
 def cutvalue(C, u):
+    """
+
+    :param C:
+    :param u:
+    :return:
+    """
     cutvalue = 0
     for t in range(np.shape(u)[1]):
         sign_evec = np.sign(u[:, t])
@@ -43,10 +49,6 @@ if __name__ == "__main__":
     Primitive2 = lambda y, x: y.dot(x)
     Primitive3 = lambda x: np.sum(np.power(x, 2))
     errfunc['cutvalue'] = lambda u: cutvalue(C, u)
-    # SCALE_X = round(1 / n, 4)
-    # SCALE_C = round(1 / norm(C, ord="fro"), 4)
-    # print(SCALE_C)
-
     varargins = dict()
 
     obj = CGAL(

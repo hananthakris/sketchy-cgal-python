@@ -5,11 +5,11 @@ import scipy.sparse.linalg as sla
 
 def ApproxMinEvecPower(M, n, q):
     """
-
-    :param M:
-    :param n:
-    :param q:
-    :return:
+    The approximation power method
+    :param M: lambda function with Primitive1(u) + Primitive2(vt, u)
+    :param n: length of array (800)
+    :param q:  math.ceil((t ** 0.25) * math.log(self.n))
+    :return: u, sig, counter_variable
     """
     if not callable(M):
         M = lambda x: M * x
@@ -61,9 +61,9 @@ def powermethod(S, n, tol):
 
 def cgal_eig(X):
     """
-
-    :param X:
-    :return:
+    Cancluate Eigen values and Eigenvectors of CGAL
+    :param X: input
+    :return: D, V where V is the eigen vector
     """
     try:
         D, V = np.linalg.eig(X)
@@ -78,11 +78,11 @@ def cgal_eig(X):
 
 def ApproxMinEvecLanczosSE(M, n, q):
     """
-
-    :param M:
-    :param n:
-    :param q:
-    :return:
+    Storage effecient Lanczos approximation
+    :param M: lambda function with Primitive1(u) + Primitive2(vt, u)
+    :param n: length of array (800)
+    :param q:  math.ceil((t ** 0.25) * math.log(self.n))
+    :return: u, sig, counter_variable
     """
     q = min(q, n - 1)
     if not callable(M):
@@ -140,11 +140,11 @@ def ApproxMinEvecLanczosSE(M, n, q):
 
 def ApproxMinEvecLanczos(M, n, q):
     """
-
-    :param M:
-    :param n:
-    :param q:
-    :return:
+    Lanczos approximation
+    :param M: lambda function with Primitive1(u) + Primitive2(vt, u)
+    :param n: length of array (800)
+    :param q:  math.ceil((t ** 0.25) * math.log(self.n))
+    :return: u, sig, counter_variable
     """
     q = min(q, n - 1)
     if M.isnumeric():
