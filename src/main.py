@@ -1,13 +1,8 @@
-import math
-import time
-import pandas as pd
 import numpy as np
 from solver.CGAL import CGAL
-import scipy.io as sio
 from pymatreader import read_mat
 from scipy.sparse import spdiags
 from scipy.sparse.linalg import norm
-from os.path import dirname, join as pjoin
 
 
 def cutvalue(C, u):
@@ -34,16 +29,23 @@ if __name__ == "__main__":
     C = (-0.25) * C
 
     del data
-    errfunc = {}
-    Primitive1 = lambda x: C * x
-    Primitive2 = lambda y, x: y * x
-    Primitive3 = lambda x: np.sum(np.power(x, 2))
-    errfunc['cutvalue'] = lambda u: cutvalue(C, u)
     a = n
     b = np.ones((n))
     SCALE_X = 1 / n
     SCALE_C = 1 / norm(C, ord="fro")
-    print(SCALE_C)
+
+    errfunc = {}
+    if SCALE_X != 1:
+        Primitive1 = lambda x: C.dot(x) * SCALE_X
+    else:
+        Primitive1 = lambda x: C.dot(x)
+
+    Primitive2 = lambda y, x: y.dot(x)
+    Primitive3 = lambda x: np.sum(np.power(x, 2))
+    errfunc['cutvalue'] = lambda u: cutvalue(C, u)
+    # SCALE_X = round(1 / n, 4)
+    # SCALE_C = round(1 / norm(C, ord="fro"), 4)
+    # print(SCALE_C)
 
     varargins = dict()
 

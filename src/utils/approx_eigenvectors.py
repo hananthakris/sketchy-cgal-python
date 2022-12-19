@@ -64,25 +64,25 @@ def ApproxMinEvecLanczosSE(M, n, q):
 
     aleph = np.zeros(q)
     beth = np.zeros(q)
-    v = np.random.randn(n)
+    v = np.random.normal(0, 1, n)
     v = v / np.linalg.norm(v)
     vi = v
     vim1 = 1
     i = 0
     for i in range(q):
         vip1 = M(vi)
-        aleph[i] = np.real(vi.T.dot(vip1))
+        aleph[i] = np.real(vi.conj().T.dot(vip1))
         if i == 0:
             vip1 -= aleph[i] * vi
         else:
             vip1 -= aleph[i] * vi - beth[i - 1] * vim1
         beth[i] = np.linalg.norm(vip1)
-        if abs(beth[i]) < np.sqrt(n) * sys.float_info.epsilon:
+        if abs(beth[i]) < np.sqrt(n) * sys.float_info.epsilon: #Epsilon
             break
         vip1 /= beth[i]
         vim1 = vi
         vi = vip1
-
+    i = i+1
     B = np.diag(aleph[:i], 0) + np.diag(beth[: i - 1], 1) + np.diag(beth[: i - 1], -1)
     D, U = cgal_eig(0.5 * (B + np.transpose(B)))
     ind = np.argmin(D)
@@ -95,7 +95,7 @@ def ApproxMinEvecLanczosSE(M, n, q):
     for i in range(len(Uind1)):
         v = v + vi * Uind1[i]
         vip1 = M(vi)
-        aleph[i] = np.real(vi.T.dot(vip1))
+        aleph[i] = np.real(vi.conj().T.dot(vip1))
         if i == 1:
             vip1 = vip1 - aleph[i] * vi
         else:
@@ -104,7 +104,7 @@ def ApproxMinEvecLanczosSE(M, n, q):
         vip1 = vip1 / beth[i]
         vim1 = vi
         vi = vip1
-    i = 2 * i
+    i = 2 * (i+1)
 
     nv = np.linalg.norm(v)
     xi = xi * nv

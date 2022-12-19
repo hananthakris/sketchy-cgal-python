@@ -109,15 +109,15 @@ class CGAL:
         """
         if self.FLAG_LANCZOS == 2:
             self.ApproxMinEvec = lambda x, t: ApproxMinEvecLanczosSE(
-                x, self.n, math.ceil((t ** 0.25) * math.log(self.n, 2))
+                x, self.n, math.ceil((t ** 0.25) * math.log(self.n))
             )
         elif self.FLAG_LANCZOS == 1:
             self.ApproxMinEvec = lambda x, t: ApproxMinEvecLanczos(
-                x, self.n, math.ceil((t ** 0.25) * math.log(self.n, 2))
+                x, self.n, math.ceil((t ** 0.25) * math.log(self.n))
             )
         else:
             self.ApproxMinEvec = lambda x, t: ApproxMinEvecPower(
-                x, self.n, math.ceil(8 * (t ** 0.5)(math.log(self.n, 2)))
+                x, self.n, math.ceil(8 * (t ** 0.5)(math.log(self.n)))
             )
 
     # Check convergence
@@ -136,8 +136,13 @@ class CGAL:
             self.Primitive2_ = lambda y, x: self.Primitive2(y * self.SCALE_A, x)
             self.RESCALE_FEAS = self.RESCALE_FEAS / self.SCALE_A
 
+        if self.SCALE_X != 1:
+            self.b = self.b*self.SCALE_X
+            self.a = self.a*self.SCALE_X
+            self.RESCALE_OBJ/= self.SCALE_X
+            self.RESCALE_FEAS/= self.SCALE_X
+
         if self.SCALE_C != 1:
-            self.Primitive1_ = lambda x: self.Primitive1(x) * self.SCALE_C
             self.RESCALE_OBJ = self.RESCALE_OBJ / self.SCALE_C
 
         if self.FLAG_INCLUSION:
@@ -157,25 +162,23 @@ class CGAL:
             self.a_t = min([self.a])
         else:
             self.a_t = max([self.a])
-            self.u = np.sqrt(self.a_t) * self.u
+        self.u = np.sqrt(self.a_t) * self.u
 
     def getObjCond(self):
         """
         Written to reduce code redundancy
         :return:  <Modiifies self>
         """
-        AHk = self.Primitive3(self.u)
+        self.AHk = self.Primitive3(self.u)
         var = (
             self.pobj
-            - self.Primitive1_(self.u).conj().T.dot(self.u)
-            + self.y.T.dot(self.b - AHk)
-            + self.beta * (self.z - self.b).conj().T.dot(self.z - AHk)
+            - self.Primitive1(self.u).conj().T.dot(self.u)
+            + self.y.conj().T.dot(self.b - self.AHk)
+            + self.beta * (self.z - self.b).conj().T.dot(self.z - self.AHk)
             - 0.5 * self.beta * np.linalg.norm(self.z - self.b) ** 2
         )
 
-        ObjCond = var * self.RESCALE_OBJ / max(abs(self.pobj * self.RESCALE_OBJ), 1)
-
-        return AHk, ObjCond
+        self.ObjCond = var * self.RESCALE_OBJ / max(abs(self.pobj * self.RESCALE_OBJ), 1)
 
     def check_stopping_criteria(self, t):
         """
@@ -200,11 +203,11 @@ class CGAL:
                 #     return True
 
             else:
-                FeasOrg = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS)
-                FeasCond = FeasOrg / max(np.linalg.norm(self.b_org), 1)
-                AHk, ObjCond = self.getObjCond()
+                self.FeasOrg = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS)
+                self.FeasCond = self.FeasOrg / max(np.linalg.norm(self.b_org), 1)
+                self.getObjCond()
 
-                if FeasCond <= self.stoptol and ObjCond <= self.stoptol:
+                if self.FeasCond <= self.stoptol and self.ObjCond <= self.stoptol:
                     if self.FLAG_CAREFULLSTOPPING:
                         if not hasattr(self, "LastCheckpoint"):
                             self.LastCheckpoint = t
@@ -213,8 +216,8 @@ class CGAL:
                             self.ApplyMinEvecApply(
                                 max(t ** 2, math.ceil(1 / self.stoptol ** 2))
                             )
-                        AHk, ObjCond = self.getObjCond()
-                        if ObjCond <= self.stoptol:
+                        self.getObjCond()
+                        if self.ObjCond <= self.stoptol:
                             self.implement_stopping_criterion(
                                 t, msg="accurate stopping"
                             )
@@ -258,17 +261,17 @@ class CGAL:
 
         return AUU
 
-    def Primitive1MultRank(self):
+    def Primitive1MultRank(self, U):
         """
         Primitive1MultRank
         :return: CU
         """
         if self.FLAG_MULTIRANK_P1:
-            CU = self.Primitive1(self.U)
+            CU = self.Primitive1(U)
         else:
-            CU = np.zeros(len(self.b))
-            for ind in range(self.U.shape[1]):
-                CU[:, ind] = self.Primitive1(self.U[:, ind])
+            CU = np.zeros(len(U))
+            for ind in range(U.shape[1]):
+                CU[:, ind] = self.Primitive1(U[:, ind])
         return CU
 
     # Create and maintain structures where we store optimization information
@@ -302,7 +305,7 @@ class CGAL:
         errNamesPrint = errNames
         for pIt in range(len(errNamesPrint)):
             if len(errNamesPrint[pIt]) > 10:
-                errNamesPrint[pIt] = errNamesPrint[pIt][:10]
+                errNamesPrint[pIt] = errNamesPrint[pIt][:15]
         ptr = 0
         self.status = "running"
         self.out["params"]["ALPHA"] = self.a
@@ -366,10 +369,13 @@ class CGAL:
                     len(self.Delt)
                 )
             self.U = self.U.dot(np.sqrt(self.Delt))
-            self.out["info"]["skPrimalObj"][self.ptr] = (
-                np.trace(self.U.conj().T.dot(self.Primitive1MultRank()))
-                * self.RESCALE_OBJ
-            )
+
+            skpo = self.Primitive1MultRank(self.U)
+            blah2 = self.U.conj().T
+            blah = np.trace(blah2.dot(skpo))
+            blah3 = blah*self.RESCALE_OBJ
+
+            self.out["info"]["skPrimalObj"][self.ptr] = blah3
             if self.FLAG_INCLUSION:
                 self.AUU = self.Primitive3MultRank()
                 self.out["info"]["skPrimalFeas"][self.ptr] = np.linalg.norm(
@@ -386,14 +392,15 @@ class CGAL:
 
         else:
             print("Unknown FLAG_METHOD.")
-
+        # z_org = self.z * self.RESCALE_FEAS
+        # y_org = self.SCALE_A * self.y / self.SCALE_C
+        # pobj_org = self.pobj * self.RESCALE_OBJ
         if not self.stoptol:
-            FeasOrg = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS)
-            FeasCond = FeasOrg / max(np.linalg.norm(self.b_org), 1)
-            AHk, ObjCond = self.getObjCond()
+            self.FeasOrg = np.linalg.norm((self.z - self.b) * self.RESCALE_FEAS)
+            self.FeasCond = self.FeasOrg / max(np.linalg.norm(self.b_org), 1)
 
-            self.out["info"]["stopObj"][self.ptr] = ObjCond
-            self.out["info"]["stopFeas"][self.ptr] = FeasCond
+        self.out["info"]["stopObj"][self.ptr] = self.ObjCond
+        self.out["info"]["stopFeas"][self.ptr] = self.FeasCond
 
         for k, val in self.errfunc.items():
             self.out["info"][k][self.ptr] = val(self.U / math.sqrt(self.SCALE_X))
@@ -413,8 +420,8 @@ class CGAL:
         self.cntTotal = 0
         self.TRACE = 0
         for t in range(1, int(self.T) + 1):
-            self.beta = self.beta0 * math.sqrt(self.T + 1)
-            eta = 2 / (self.T + 1)
+            self.beta = self.beta0 * math.sqrt(t + 1)
+            eta = 2 / (t + 1)
             if self.FLAG_INCLUSION:
                 self.vt = self.y + self.beta * (
                     self.z - self.PROJBOX(self.z + (1 / self.beta) * self.y)
@@ -422,7 +429,7 @@ class CGAL:
             else:
                 self.vt = self.y + self.beta * (self.z - self.b)
 
-            self.eigsArg = lambda u: self.Primitive1_(u) + self.Primitive2(self.vt, u)
+            self.eigsArg = lambda u: self.Primitive1(u) + self.Primitive2(self.vt, u)
             self.ApplyMinEvecApply(t)
             if self.check_stopping_criteria(t):
                 break
@@ -431,7 +438,7 @@ class CGAL:
                 self.z = (1 - eta) * self.z + eta * self.zEvec
                 self.TRACE = (1 - eta) * self.TRACE + eta * self.a_t
 
-                objEvec = np.dot(self.u.conj().T, self.Primitive1_(self.u))
+                objEvec = np.dot(self.u.conj().T, self.Primitive1(self.u))
                 self.pobj = (1 - eta) * self.pobj + eta * objEvec
 
                 if self.FLAG_METHOD == 0:
@@ -457,7 +464,7 @@ class CGAL:
                 )
 
                 # Update the DUAL
-                yt1 = self.y + np.multiply(sigma, dualUpdate)
+                yt1 = self.y + sigma * dualUpdate
                 if np.linalg.norm(yt1 - self.y0) <= self.K:
                     self.y = yt1
 
@@ -482,6 +489,6 @@ class CGAL:
                     (self.TRACE - np.trace(self.Delt)) / self.R
                 ) * np.eye(np.shape(self.Delt)[0])
             self.Delt = np.divide(self.Delt, self.SCALE_X)
-        self.y = np.divide(np.multiply(self.SCALE_A, self.y), self.SCALE_C)
-        self.z = np.multiply(self.z, self.RESCALE_FEAS)
+        self.y = np.divide(self.SCALE_A * self.y, self.SCALE_C)
+        self.z = self.z * self.RESCALE_FEAS
         self.pobj *= self.RESCALE_OBJ
