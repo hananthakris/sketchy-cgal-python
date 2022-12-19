@@ -4,11 +4,24 @@ import math
 from numba import jit
 
 def mrdivide(A, B):
+        """
+
+        :param A:
+        :param B:
+        :return:
+        """
         C = A.dot(B.T.dot(np.linalg.inv(B.dot(B.T))))
         return C
 
 @jit(nopython=True)
 def reconstruct(S, Omega, eps):
+        """
+
+        :param S:
+        :param Omega:
+        :param eps:
+        :return:
+        """
         n = len(S)
         norms = []
         for col in S.reshape(S.shape[1], S.shape[0]):

@@ -4,6 +4,13 @@ import scipy.sparse.linalg as sla
 
 
 def ApproxMinEvecPower(M, n, q):
+    """
+
+    :param M:
+    :param n:
+    :param q:
+    :return:
+    """
     if not callable(M):
         M = lambda x: M * x
 
@@ -24,6 +31,13 @@ def ApproxMinEvecPower(M, n, q):
 
 
 def powermethod(S, n, tol):
+    """
+
+    :param S:
+    :param n:
+    :param tol:
+    :return:
+    """
     cnt = 0
     x = np.random.randn(n)
     x = x / np.linalg.norm(x)
@@ -46,18 +60,30 @@ def powermethod(S, n, tol):
 
 
 def cgal_eig(X):
+    """
+
+    :param X:
+    :return:
+    """
     try:
         D, V = np.linalg.eig(X)
     except:
         print("EXCEPTION")
         V, D, W = np.linalg.svd(X)
-        D = np.diagonal(D).T.dot(np.sign(np.real(np.dot(V, W, 1))))
+        D = np.diagonal(D).T.dot(np.sign(np.real(np.dot(V, W))))
         D, ind = np.sort(D)
         V = V[:, ind]
     return D, V
 
 
 def ApproxMinEvecLanczosSE(M, n, q):
+    """
+
+    :param M:
+    :param n:
+    :param q:
+    :return:
+    """
     q = min(q, n - 1)
     if not callable(M):
         M = lambda x: M * x
@@ -113,6 +139,13 @@ def ApproxMinEvecLanczosSE(M, n, q):
 
 
 def ApproxMinEvecLanczos(M, n, q):
+    """
+
+    :param M:
+    :param n:
+    :param q:
+    :return:
+    """
     q = min(q, n - 1)
     if M.isnumeric():
         M = lambda x: M * x
