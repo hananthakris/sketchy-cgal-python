@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import math
 from numba import jit
+from IPython import embed
 
 def mrdivide(A, B):
         """
@@ -13,7 +14,7 @@ def mrdivide(A, B):
         C = A.dot(B.T.dot(np.linalg.inv(B.dot(B.T))))
         return C
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def reconstruct(S, Omega, eps):
         """
         Reconstruct the sketch
@@ -30,6 +31,11 @@ def reconstruct(S, Omega, eps):
         S = S + sigma * Omega #Implicitly form sketch of X + σ I
         B = Omega.conj().T.dot(S)
         B = 0.5 * (B + B.conj().T)
+
+        print(B)
+        print(B.shape)
+        embed()
+        exit()
 
         # Where the code is failing! - Cholesky in numpy not giving the upper triangle.
         C = np.linalg.cholesky(B)
